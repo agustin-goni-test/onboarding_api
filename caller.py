@@ -39,7 +39,7 @@ def send():
             logger.error(f"Call to inference endpoint failed: {str(e)}")
 
     print("Status:", response.status_code)
-    print("Response:", response.json())
+    print("Response:", response.text)
 
 
 def send_with_visibility():
@@ -76,7 +76,7 @@ def send_with_visibility():
         response = session.send(prepped)
 
     print("Status:", response.status_code)
-    print("Response:", response.json())
+    print("Response:", response.text)
 
 
 if __name__ == "__main__":

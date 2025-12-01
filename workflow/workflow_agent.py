@@ -1,19 +1,43 @@
-from typing import TypedDict, Dict, Any, List
+from typing import TypedDict, Dict, Any, List, Tuple
+from pydantic import BaseModel, Field
 from logger import setup_logging, get_logger
 from langgraph.graph import StateGraph, END
 from google import genai
 from dotenv import load_dotenv
 import os
+import re
+import base64
+import json
+
 
 setup_logging()
 # logger = get_logger(__name__)
 
 load_dotenv()
 
-class InferenceState(TypedDict):
-    local_results: Any = None
-    inferences: List[str] = None
-    results: Any = None
+class ResultNode(BaseModel):
+    field: str = ""
+    found: bool = False
+    found_by: List[str] = Field(default_factory=list)
+    values: List[str] = Field(default_factory=list)
+    probable_value: str = ""
+    confidences: List[int] = Field(default_factory=list)
+    low_confidence: bool = "False"
+    found_multiple: bool = "False"
+
+    def to_json(self, **kwargs) -> str:
+        '''Convert to JSON'''
+        return self.model_dump_json(**kwargs)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> "ResultNode":
+        '''Create from a JSON string'''
+        return cls.model_validate_json(json_str)
+
+class InferenceState(BaseModel):
+    local_results: List[Tuple[str, Dict[str, Any]]] = Field(default_factory=list)
+    inferences: List[str] = Field(default_factory=list)
+    results: List[ResultNode] = Field(default_factory=list)
     success: bool = False
     response_format: Any = None
 
@@ -61,7 +85,7 @@ class InferenceAgent:
         workflow.add_node("consolidate", self._run_consolidation)
 
         # Add the rest of the nodes
-        workflow.add_node("determine_success", self._determine_success)
+        # workflow.add_node("determine_success", self._determine_success)
         workflow.add_node("create_output", self._create_output)
         workflow.add_node("handle_failure", self._run_handle_failure)
         
@@ -75,14 +99,14 @@ class InferenceAgent:
         # workflow.add_edge(["infer_with_gemini", "infer_with_deepseek"], "consolidate")
         workflow.add_edge("infer_with_gemini", "consolidate")
 
-        workflow.add_edge("consolidate", "determine_success")
+        # workflow.add_edge("consolidate", "determine_success")
 
         # Add extra nodes to complete workflow
-        workflow.add_edge("consolidate", "determine_success")
+        # workflow.add_edge("consolidate", "determine_success")
 
         # Add node that defines whether the inference was successful
         workflow.add_conditional_edges(
-            "determine_success",
+            "consolidate",
             self._determine_success,
             {
                 "success": "create_output",
@@ -111,6 +135,7 @@ class InferenceAgent:
         '''
         Method to run the query through Gemini
         '''
+        self.logger.info("Entering GEMINMI INFERENCE node...")
 
         # Obtain variables related to Gemini
         api_key = os.getenv("GEMINI_API_KEY")
@@ -119,34 +144,109 @@ class InferenceAgent:
         # Create Gemini client
         client = genai.Client(api_key=api_key)
 
-        # Run inference on Gemini client
+
+        base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
+
+        # Run inference on Gemini client. Pass the file as an inline stream of bytes
         response = client.models.generate_content(
             model=model,
-            contents=[self.prompt, self.uploaded_file]
+            contents=[
+                self.prompt,
+                {
+                    "inline_data": {
+                        "mime_type": "application/pdf",
+                        "data": base64_data
+                    }
+                }
+            ]
         )
 
         # Parse and normalize response
         content_json = self._clean_and_parse_json(response.candidates[0].content.parts[0].text)
         json_response = self._normalize_fields(content_json, self.fields)
 
-        # Add results to the local results --- PENDING!!!
+        self.logger.info("Information obtained from GEMINI...")
 
+        # Add information to the state.
+        # First, add the inference tool to inferences.
+        # Then, add the results to the list of local results.
+        state.inferences.append("gemini")
+        state.local_results.append(("gemini", json_response))
+
+        # Return the state with the changes
+        return state
 
 
     def _run_deepseek_inference(self, state: InferenceState):
         pass
 
-    def _run_consolidation(self, state: InferenceState):
-        pass
+    def _run_consolidation(self, state: InferenceState) -> InferenceState:
+        '''
+        Method to consolidate the results of multiple different calls.
+        '''
+        self.logger.info("Entering CONSOLIDATION node...")
 
-    def _create_output(self, state: InferenceState):
-        pass
+        # Iterate through every LLM used and the results obtained in local results
+        for llm_name, result in state.local_results:
+
+            # Take each field and the information related to that field
+            for field, info in result.items():
+
+                # Find the fields already captured in the final result. If the current
+                # field is not there, create a new node and populate values
+                fields_in_results = {node.field for node in state.results}
+                if not (field in fields_in_results):
+                    new_result = ResultNode()
+                    new_result.field = field
+                    new_result.found = True if info["match"] else False
+                    new_result.values.append(info["value"])
+                    new_result.probable_value = info["value"]
+                    new_result.confidences.append(info["confidence"])
+                    new_result.found_by.append(llm_name)
+                    new_result.found_multiple = False
+                    new_result.low_confidence = True if info["confidence"] < 90 else False
+                    state.results.append(new_result)
+
+                # If the field was already appended, tweak the values --- TO DO!!!                
+                else:
+                    pass
+        
+        return state
+    
+
+    def _create_output(self, state: InferenceState) -> InferenceState:
+        '''
+        Method to create the output that will constitute the response of the API call.
+        '''
+        self.logger.info("Entering CREATE OUTPUT node...")
+
+        # output_format = json.dumps(
+        #         [result.model_dump() for result in state.results],
+        #         ensure_ascii=False
+        #     )
+        
+        output_data = [result.model_dump() for result in state.results]
+        state.response_format = output_data
+        return state
+
 
     def _run_handle_failure(self, state: InferenceState):
         pass
 
-    def _determine_success(self, state: InferenceState):
-        pass
+    def _determine_success(self, state: InferenceState) -> str:
+        '''
+        Method to determine if the inference was a success.
+        
+        We consider success if at least one field was found.'''
+        self.logger.info("Entering DETERMINE SUCCESS node...")
+
+        if len(state.results) >= 1:
+            state.success = True
+            return "success"
+        else:
+            state.success = False
+            return "failure"
+        
 
     def build_initial_state(self) -> InferenceState:
         '''
