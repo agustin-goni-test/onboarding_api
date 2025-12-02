@@ -22,8 +22,8 @@ class ResultNode(BaseModel):
     values: List[str] = Field(default_factory=list)
     probable_value: str = ""
     confidences: List[int] = Field(default_factory=list)
-    low_confidence: bool = "False"
-    found_multiple: bool = "False"
+    low_confidence: bool = False
+    found_multiple: bool = False
 
     def to_json(self, **kwargs) -> str:
         '''Convert to JSON'''
@@ -39,7 +39,7 @@ class InferenceState(BaseModel):
     inferences: List[str] = Field(default_factory=list)
     results: List[ResultNode] = Field(default_factory=list)
     success: bool = False
-    response_format: Any = None
+    response_format: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class InferenceAgent:

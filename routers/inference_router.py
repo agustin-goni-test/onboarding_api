@@ -74,7 +74,6 @@ async def inference_manager(
             "user_id": user_id,
             "filename": file.filename,
             "content_type": file.content_type,
-            "data": final_state["response_format"],
-            "raw_json": json_data
+            "data": final_state["response_format"]
         }
     )
