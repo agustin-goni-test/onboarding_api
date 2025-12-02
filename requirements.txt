@@ -1,1 +1,1 @@
-pip install fastapi uvicorn python-multipart pydantic dotenv langgraph google-genai
+pip install fastapi uvicorn python-multipart pydantic dotenv langgraph google-genai openai

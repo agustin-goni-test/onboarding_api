@@ -3,8 +3,10 @@ from pydantic import BaseModel, Field
 from logger import setup_logging, get_logger
 from langgraph.graph import StateGraph, END
 from google import genai
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import io
 import re
 import base64
 import json
@@ -20,6 +22,7 @@ class ResultNode(BaseModel):
     found: bool = False
     found_by: List[str] = Field(default_factory=list)
     values: List[str] = Field(default_factory=list)
+    explanations: List[str] = Field(default_factory=list)
     probable_value: str = ""
     confidences: List[int] = Field(default_factory=list)
     low_confidence: bool = False
@@ -78,10 +81,10 @@ class InferenceAgent:
         workflow.add_node("setup", self._run_setup)
         
         # Add multiple inference nodes to deal with different LLMs
-        workflow.add_node("infer_with_gemini", self._run_gemini_inference)
-        # workflow.add_node("infer_with_deepseek", self._run_deepseek_inference)
+        # workflow.add_node("infer_with_gemini", self._run_gemini_inference)
+        workflow.add_node("infer_with_deepseek", self._run_openai_inference)
 
-        # Add a consolidation node
+        # Add a consolidation node# 
         workflow.add_node("consolidate", self._run_consolidation)
 
         # Add the rest of the nodes
@@ -92,12 +95,13 @@ class InferenceAgent:
         workflow.set_entry_point("setup")
 
         # Branch out nodes to run every inference in parallel
-        workflow.add_edge("setup", "infer_with_gemini")
-        # workflow.add_edge("setup", "infer_with_deepseek")
+        # workflow.add_edge("setup", "infer_with_gemini")
+        workflow.add_edge("setup", "infer_with_deepseek")
 
         # Join back inference nodes to consolidate results
         # workflow.add_edge(["infer_with_gemini", "infer_with_deepseek"], "consolidate")
-        workflow.add_edge("infer_with_gemini", "consolidate")
+        # workflow.add_edge("infer_with_gemini", "consolidate")
+        workflow.add_edge("infer_with_deepseek", "consolidate")
 
         # workflow.add_edge("consolidate", "determine_success")
 
@@ -144,7 +148,6 @@ class InferenceAgent:
         # Create Gemini client
         client = genai.Client(api_key=api_key)
 
-
         base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
 
         # Run inference on Gemini client. Pass the file as an inline stream of bytes
@@ -177,8 +180,55 @@ class InferenceAgent:
         return state
 
 
-    def _run_deepseek_inference(self, state: InferenceState):
-        pass
+    def _run_openai_inference(self, state: InferenceState) -> InferenceState:
+        '''
+        Method to run query through DeepSeek
+        '''
+        self.logger.info("Entering OPEN AI INFERENCE node...")
+
+        api_key = os.getenv("OPEN_AI_API_KEY")
+        model = os.getenv("OPEN_AI_MODEL")
+
+        client = OpenAI(api_key=api_key)
+
+        # base64_data = base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
+        file_obj = io.BytesIO(self.uploaded_file)
+        mime_type = "application/pdf"
+
+        uploaded = client.files.create(file=("file.pdf", file_obj, mime_type),
+                                       purpose='user_data'
+                                       )
+        file_id = uploaded.id
+    
+        
+        prompt = self.prompt
+
+
+        response = client.responses.create(
+            model=model,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {"type": "input_file", "file_id": file_id }
+                    ]
+                }
+            ],
+            max_output_tokens=4096
+        )
+
+        response_text = response.output_text
+
+        content_json = self._clean_and_parse_json(response_text)
+        json_response = self._normalize_fields(content_json, self.fields)
+
+        state.inferences.append("openai")
+        state.local_results.append(("openai", json_response))
+
+        return state
+
+        
 
     def _run_consolidation(self, state: InferenceState) -> InferenceState:
         '''
@@ -200,6 +250,7 @@ class InferenceAgent:
                     new_result.field = field
                     new_result.found = True if info["match"] else False
                     new_result.values.append(info["value"])
+                    new_result.explanations.append(info["explanation"])
                     new_result.probable_value = info["value"]
                     new_result.confidences.append(info["confidence"])
                     new_result.found_by.append(llm_name)
