@@ -1,0 +1,11 @@
+nombre_banco: >
+  Nombre del banco al que pertenece la cuenta. Agregar nombre comercial,
+  omitir palabras como 'preferencial', 'select', etc.
+  Ejemplo: 'Santander Select' debiera retorna 'Santander'.
+
+tipo_cuenta: >
+  Tipo de la cuenta que aparece. Puede ser, por ejemplo, 'Corriente'
+  o 'Ahorro'. Expresar siempre con la primera letra en mayúscula.
+
+num_cuenta: >
+  Número de la cuenta que aparece en el documento.

@@ -1,0 +1,13 @@
+nombre_contacto: >
+  Nombre completo del contacto principal contenido en el documento,
+  con nombres y apellidos en el mismo orden que aparecen.
+
+rut_contacto: >
+  RUT del contacto principal del comercio. Puede estar en formato
+  '12345678-9' o '12.345.678-9', pero SIEMPRE expresar en formato
+  '12345678-9' (incluir el guion).
+
+num_serie: >
+  Número de serie del documento de identidad del contacto principal.
+  Formato '111.111.111' o '111111111'. Puede contener letras pero
+  nunca guiones. El formato de salida es siempre '111111111'.

@@ -42,6 +42,7 @@ async def inference_manager(
     # Create agent and pass the file
     agent = InferenceAgent()
     agent.feed_file_to_agent(file_bytes, file_name)
+    agent.set_type_of_inference(inference_type)
     logger.info("Inference agent created...")
 
     # Set initial (empty) state

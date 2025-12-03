@@ -6,7 +6,8 @@ logger = get_logger(__name__)
 
 URL = "http://127.0.0.1:8000/onboarding/inference/infer"
 # FILE_PATH = "sources/carnet_ficticio.pdf"
-FILE_PATH = "sources/carnet.jpg"
+# FILE_PATH = "sources/carnet.jpg"
+FILE_PATH = "sources/image.jpg"
 
 def send():
     '''
@@ -15,7 +16,7 @@ def send():
     
     # Data for the call, includes parameters
     data = {
-        "inference_type": "contact",
+        "inference_type": "account",
         "user_id": "1"
     }
 

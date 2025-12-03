@@ -12,6 +12,8 @@ import io
 import re
 import base64
 import json
+import yaml
+from pathlib import Path    
 
 
 setup_logging()
@@ -63,6 +65,7 @@ class InferenceAgent:
     def __init__(self):
         self.finished = False
         self.logger = get_logger(__name__)
+        self.type_of_inference = None
         self.prompt = None
         self.fields = None
         self.uploaded_file = None
@@ -77,6 +80,9 @@ class InferenceAgent:
         # self.mime_type = self._determine_mime_type(name)
         self.mime_type = self._determine_mime_type(name)
         self.uploaded_file = data
+
+    def set_type_of_inference(self, type: str):
+        self.type_of_inference = type
 
     def _determine_mime_type(self, filename: str) -> str:
         '''
@@ -191,8 +197,11 @@ class InferenceAgent:
 
         # Create the appropiate field list and prompt
         # This impacts the AGENT. The STATE remains unchanged
-        self._set_fields_to_infer()
-        self._set_prompt(self.fields)
+        # self._set_fields_to_infer()
+        self._set_fields_from_yaml()
+
+        # self._set_prompt(self.fields)
+        self._set_prompt_from_file(self.fields)
 
         return state
         
@@ -424,11 +433,6 @@ class InferenceAgent:
         Method to create the output that will constitute the response of the API call.
         '''
         self.logger.info("Entering CREATE OUTPUT node...")
-
-        # output_format = json.dumps(
-        #         [result.model_dump() for result in state.results],
-        #         ensure_ascii=False
-        #     )
         
         output_data = [result.model_dump() for result in state.results]
         state.response_format = output_data
@@ -490,6 +494,20 @@ class InferenceAgent:
         self.fields = fields
 
     
+    def _set_fields_from_yaml(self):
+        '''
+        This method allows the creation of a custom field list from a YAML file.
+        '''
+        if self.type_of_inference == "contact":
+            file_name = "contacto.yaml"
+        elif self.type_of_inference == 'account':
+            file_name = "cuenta.yaml"
+
+        path = Path("prompts/field_lists") / file_name
+        with path.open("r", encoding='utf-8') as f:
+            self.fields = yaml.safe_load(f)
+
+    
     def _set_prompt(self, fields_dict: Dict[str, str]):
         '''
         Method to create the prompt for the inteference.
@@ -541,7 +559,10 @@ class InferenceAgent:
         # Add this prompt to the agent
         self.prompt = prompt
         
-        pass
+    def _set_prompt_from_file(self, fields_dict: Dict[str, str]):
+        path = Path("prompts/templates") / "default_prompt.txt"
+        prompt_template = path.read_text(encoding='utf-8')
+        self.prompt = prompt_template.replace("{{fields_dict}}", str(fields_dict))
 
 
     def _clean_and_parse_json(self, text: str):
