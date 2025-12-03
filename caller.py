@@ -38,8 +38,8 @@ def send():
         except Exception as e:
             logger.error(f"Call to inference endpoint failed: {str(e)}")
 
-    print("Status:", response.status_code)
-    print("Response:", response.text)
+    print("\nStatus:", response.status_code)
+    print("\nResponse:", response.text)
 
 
 def send_with_visibility():

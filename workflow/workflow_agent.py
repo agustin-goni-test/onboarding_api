@@ -1,7 +1,9 @@
-from typing import TypedDict, Dict, Any, List, Tuple
+from typing import TypedDict, Dict, Any, List, Tuple, Annotated
 from pydantic import BaseModel, Field
 from logger import setup_logging, get_logger
 from langgraph.graph import StateGraph, END
+from langgraph.channels import BaseChannel
+import operator
 from google import genai
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -38,8 +40,20 @@ class ResultNode(BaseModel):
         return cls.model_validate_json(json_str)
 
 class InferenceState(BaseModel):
-    local_results: List[Tuple[str, Dict[str, Any]]] = Field(default_factory=list)
-    inferences: List[str] = Field(default_factory=list)
+    
+    # These two properties requiere to behave as channels, that is,
+    # to aggregate the results if more than one node is active and
+    # writing to them at the same time
+    local_results: Annotated[
+        List[Tuple[str, Dict[str, Any]]],
+        operator.add
+        ] = Field(default_factory=list)
+    
+    # The solution is to annotate them to be able to add incrementally
+    # to the final value of the property. Otherwise, only one edit is possible
+    inferences: Annotated[List[str], operator.add] = Field(default_factory=list)
+    
+    # These other properties don't need to be concurrently written
     results: List[ResultNode] = Field(default_factory=list)
     success: bool = False
     response_format: List[Dict[str, Any]] = Field(default_factory=list)
@@ -81,8 +95,8 @@ class InferenceAgent:
         workflow.add_node("setup", self._run_setup)
         
         # Add multiple inference nodes to deal with different LLMs
-        # workflow.add_node("infer_with_gemini", self._run_gemini_inference)
-        workflow.add_node("infer_with_deepseek", self._run_openai_inference)
+        workflow.add_node("infer_with_gemini", self._run_gemini_inference)
+        workflow.add_node("infer_with_openai", self._run_openai_inference)
 
         # Add a consolidation node# 
         workflow.add_node("consolidate", self._run_consolidation)
@@ -95,13 +109,13 @@ class InferenceAgent:
         workflow.set_entry_point("setup")
 
         # Branch out nodes to run every inference in parallel
-        # workflow.add_edge("setup", "infer_with_gemini")
-        workflow.add_edge("setup", "infer_with_deepseek")
+        workflow.add_edge("setup", "infer_with_gemini")
+        workflow.add_edge("setup", "infer_with_openai")
 
         # Join back inference nodes to consolidate results
-        # workflow.add_edge(["infer_with_gemini", "infer_with_deepseek"], "consolidate")
+        workflow.add_edge(["infer_with_gemini", "infer_with_openai"], "consolidate")
         # workflow.add_edge("infer_with_gemini", "consolidate")
-        workflow.add_edge("infer_with_deepseek", "consolidate")
+        # workflow.add_edge("infer_with_deepseek", "consolidate")
 
         # workflow.add_edge("consolidate", "determine_success")
 
@@ -149,6 +163,7 @@ class InferenceAgent:
         client = genai.Client(api_key=api_key)
 
         base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
+        self.logger.info("Passing file to GEMINI as Base64 encoded data...")
 
         # Run inference on Gemini client. Pass the file as an inline stream of bytes
         response = client.models.generate_content(
@@ -168,16 +183,20 @@ class InferenceAgent:
         content_json = self._clean_and_parse_json(response.candidates[0].content.parts[0].text)
         json_response = self._normalize_fields(content_json, self.fields)
 
-        self.logger.info("Information obtained from GEMINI...")
+        self.logger.info("Information obtained from GEMINI... adding data to results...")
 
         # Add information to the state.
         # First, add the inference tool to inferences.
         # Then, add the results to the list of local results.
-        state.inferences.append("gemini")
-        state.local_results.append(("gemini", json_response))
+        # state.inferences.append("gemini")
+        # state.local_results.append(("gemini", json_response))
 
         # Return the state with the changes
-        return state
+        # return state
+        return {
+            "inferences": ["gemini"],                         # appended to state.inferences
+            "local_results": [("gemini", json_response)]      # appended to state.local_results
+        }
 
 
     def _run_openai_inference(self, state: InferenceState) -> InferenceState:
@@ -186,24 +205,28 @@ class InferenceAgent:
         '''
         self.logger.info("Entering OPEN AI INFERENCE node...")
 
+        # Get OpenAI parameters from configuration
         api_key = os.getenv("OPEN_AI_API_KEY")
         model = os.getenv("OPEN_AI_MODEL")
 
+        # Create the client
         client = OpenAI(api_key=api_key)
 
-        # base64_data = base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
+        # Create an in memory file to upload to the client
         file_obj = io.BytesIO(self.uploaded_file)
         mime_type = "application/pdf"
 
+        # Upload file and obtain id
         uploaded = client.files.create(file=("file.pdf", file_obj, mime_type),
                                        purpose='user_data'
                                        )
         file_id = uploaded.id
+        self.logger.info("Passing file to OPENAI as direct upload...")
     
-        
+        # Retrieve the prompt (for simpler readability)
         prompt = self.prompt
 
-
+        # Call client to create inference
         response = client.responses.create(
             model=model,
             input=[
@@ -218,15 +241,20 @@ class InferenceAgent:
             max_output_tokens=4096
         )
 
+        # Obtain and parse response
         response_text = response.output_text
-
         content_json = self._clean_and_parse_json(response_text)
         json_response = self._normalize_fields(content_json, self.fields)
 
-        state.inferences.append("openai")
-        state.local_results.append(("openai", json_response))
+        self.logger.info("Information obtained from OPENAI... adding data to results...")
 
-        return state
+        # return state  
+        return {
+            "inferences": ["openai"],                         # appended to state.inferences
+            "local_results": [("openai", json_response)]      # appended to state.local_results
+        }
+    
+
 
         
 
@@ -257,10 +285,61 @@ class InferenceAgent:
                     new_result.found_multiple = False
                     new_result.low_confidence = True if info["confidence"] < 90 else False
                     state.results.append(new_result)
+                    self.logger.info(f"New value added to results from {llm_name} response")
 
                 # If the field was already appended, tweak the values --- TO DO!!!                
                 else:
-                    pass
+                    # Get the ResultNode that already contained results for this field
+                    existing_node = next(node for node in state.results if node.field == field)
+
+                    # Get the data from the current info
+                    current_value = info["value"]
+                    confidence = info["confidence"]
+                    explanation = info["explanation"]
+
+                    # Find if the current value was already captured in the result node
+                    if current_value in existing_node.values:
+                        # If the value was already captured, there's no need to add a new value,
+                        # or a new explanation.
+                        # We will set the value as the most probable as a APPROXIMATION,
+                        # since there might be scenarios where finding it more than once
+                        # still doesn't mean it's the most probable
+                        existing_node.probable_value = current_value
+
+                        # Confidences should be averaged
+                        # For this, we must find the position in the array the value occupies
+                        value_position = existing_node.values.index(current_value)
+                        previous_confidence = existing_node.confidences[value_position]
+                        new_confidence = int((confidence + previous_confidence) / 2)
+                        existing_node.confidences[value_position] = new_confidence
+
+                        # Reevaluate if value has low confidence and append LLM name
+                        existing_node.low_confidence = True if new_confidence < 90 else False
+                        existing_node.found_by.append(llm_name)
+                        self.logger.info(f"Information updated from {llm_name} results...")
+
+                    else:
+                        # If not, we must append it, along with the confidence and explanation
+                        existing_node.values.append(current_value)
+                        existing_node.confidences.append(confidence)
+                        existing_node.explanations.append(explanation)
+                        existing_node.found_by.append(llm_name)
+                        existing_node.found_multiple = True
+                        
+                        # Determine if the probable value must change
+                        # If the confidence of this new value is higher than any other
+                        # It will be the probable value. If not, leave unchanged
+                        max_confidence = int(max(item for item in existing_node.confidences))
+                        if confidence > max_confidence:
+                            existing_node.probable_value = current_value
+
+                            # Determine if the new probable value has low confidence
+                            existing_node.low_confidence = True if max(confidence, max_confidence) < 90 else False
+
+                        self.logger.info("Multiple values found and added...")
+
+                
+                    
         
         return state
     
