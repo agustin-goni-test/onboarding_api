@@ -66,14 +66,62 @@ class InferenceAgent:
         self.prompt = None
         self.fields = None
         self.uploaded_file = None
+        self.mime_type = None
         self.graph = self._build_graph()
 
 
-    def feed_file_to_agent(self, data: bytes):
+    def feed_file_to_agent(self, data: bytes, name: str):
         '''
         Method to assign the contents of the file to the agent.
         '''
+        # self.mime_type = self._determine_mime_type(name)
+        self.mime_type = self._determine_mime_type(name)
         self.uploaded_file = data
+
+    def _determine_mime_type(self, filename: str) -> str:
+        '''
+        Determine the MIME type of the input file as sent by the service.
+        Handles PDF and common image types.
+        Needed to use in the LLM uploads.
+        '''
+        extension = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+        
+        # Map all common types
+        mime_map = {
+            "pdf": "application/pdf",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "bmp": "image/bmp",
+            "tiff": "image/tiff",
+            "tif": "image/tiff",
+            "webp": "image/webp",
+            "heic": "image/heic",
+            "heif": "image/heif",
+        }
+
+        # Return type. Use a safe default value if all else fails
+        return mime_map.get(extension, "application/octet-stream")
+    
+
+    def _obtain_extension_for_file(self, mime_type: str) -> str:
+        
+        # Map all common types
+        extensions = {
+            "application/pdf": "pdf",
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/bmp": "bmp",
+            "image/tiff": "tiff",
+            "image/webp": "webp",
+            "image/heic": "heic",
+            "image/heif": "heif",
+        }
+        
+        return extensions.get(mime_type, "")
+
 
     
     def capture_data(self, initial_state: InferenceState) -> InferenceState:
@@ -172,7 +220,7 @@ class InferenceAgent:
                 self.prompt,
                 {
                     "inline_data": {
-                        "mime_type": "application/pdf",
+                        "mime_type": self.mime_type,
                         "data": base64_data
                     }
                 }
@@ -212,37 +260,67 @@ class InferenceAgent:
         # Create the client
         client = OpenAI(api_key=api_key)
 
-        # Create an in memory file to upload to the client
-        file_obj = io.BytesIO(self.uploaded_file)
-        mime_type = "application/pdf"
+        if self.mime_type.startswith('image/'):
+            base64_image = base64.b64encode(self.uploaded_file).decode('utf-8')
 
-        # Upload file and obtain id
-        uploaded = client.files.create(file=("file.pdf", file_obj, mime_type),
-                                       purpose='user_data'
-                                       )
-        file_id = uploaded.id
-        self.logger.info("Passing file to OPENAI as direct upload...")
-    
-        # Retrieve the prompt (for simpler readability)
-        prompt = self.prompt
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": self.prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=4096
+            )
 
-        # Call client to create inference
-        response = client.responses.create(
-            model=model,
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        {"type": "input_file", "file_id": file_id }
-                    ]
-                }
-            ],
-            max_output_tokens=4096
-        )
+            response_text = response.choices[0].message.content
 
-        # Obtain and parse response
-        response_text = response.output_text
+        else:
+            
+            # Create an in memory file to upload to the client
+            file_obj = io.BytesIO(self.uploaded_file)
+            # mime_type = "application/pdf"
+
+            # Upload file and obtain id
+            extension = self._obtain_extension_for_file(self.mime_type)
+            filename = "file." + extension
+            uploaded = client.files.create(file=(filename, file_obj, self.mime_type),
+                                        purpose='user_data'
+                                        )
+            file_id = uploaded.id
+            self.logger.info("Passing file to OPENAI as direct upload...")
+            
+        
+            # Retrieve the prompt (for simpler readability)
+            prompt = self.prompt
+
+            # Call client to create inference
+            response = client.responses.create(
+                model=model,
+                input=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": prompt},
+                            {"type": "input_file", "file_id": file_id }
+                        ]
+                    }
+                ],
+                max_output_tokens=4096
+            )
+
+            # Obtain and parse response
+            response_text = response.output_text
+
         content_json = self._clean_and_parse_json(response_text)
         json_response = self._normalize_fields(content_json, self.fields)
 
@@ -253,10 +331,7 @@ class InferenceAgent:
             "inferences": ["openai"],                         # appended to state.inferences
             "local_results": [("openai", json_response)]      # appended to state.local_results
         }
-    
-
-
-        
+            
 
     def _run_consolidation(self, state: InferenceState) -> InferenceState:
         '''
@@ -406,8 +481,8 @@ class InferenceAgent:
         
         # Create the fields
         fields = {
-            "nombre_contacto": "Nombre del contacto principal contenido en el document",
-            "rut_contacto": "RUT del contacto principal del comercio. Puede estar en formato '12345678-9' o '12.345.678-9', pero SIEMPRE expresar en formato '12345678-9'.",
+            "nombre_contacto": "Nombre completo del contacto principal contenido en el documento, con nombres y apellidos en el mismo orden que aparecen",
+            "rut_contacto": "RUT del contacto principal del comercio. Puede estar en formato '12345678-9' o '12.345.678-9', pero SIEMPRE expresar en formato '12345678-9' (incluir el guión).",
             "num_serie": "Número de serie del documento de identidad del contacto principal. Formato '111.111.111' o '111111111'. Puede contener letras pero NUNCA guiones. El formato de salida es siempre '111111111'."
         }
         
@@ -449,7 +524,7 @@ class InferenceAgent:
         - explanation must reference **where** or **how** the model inferred the value
         (e.g., “Found in line about business owner: ‘Razon social:…’”).
         - confidence is 0 to 100. Use higher confidence when text is direct and explicit.
-        - If a field has "rut" in its name, express the value without '.' in it, no matter how it comes
+        - If a field has "rut" in its name, express the value without '.', but always include '-' in it, no matter how it comes
         (e.g. if it is '10.345.678-2', express it as '10345678-2').
         - one-word values for fields must start with an uppercase or be all caps (only if this is how they appeared in the document)
         -'num_serie' must also be expressed with no '.' in it (e.g., instead of '123.456.789', express it as '123456789').

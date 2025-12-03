@@ -37,10 +37,11 @@ async def inference_manager(
 
     # Obtain file as byte stream from the UploadFile object of FastAPI
     file_bytes = await file.read()
+    file_name = file.filename
 
     # Create agent and pass the file
     agent = InferenceAgent()
-    agent.feed_file_to_agent(file_bytes)
+    agent.feed_file_to_agent(file_bytes, file_name)
     logger.info("Inference agent created...")
 
     # Set initial (empty) state

@@ -5,7 +5,8 @@ setup_logging()
 logger = get_logger(__name__)
 
 URL = "http://127.0.0.1:8000/onboarding/inference/infer"
-FILE_PATH = "sources/carnet_ficticio.pdf"
+# FILE_PATH = "sources/carnet_ficticio.pdf"
+FILE_PATH = "sources/carnet.jpg"
 
 def send():
     '''
