@@ -1,22 +1,57 @@
 import requests
+import argparse
+import os
 from logger import setup_logging, get_logger
+from utils import TimeMeasure
 
 setup_logging()
 logger = get_logger(__name__)
+timer = TimeMeasure()
 
 URL = "http://127.0.0.1:8000/onboarding/inference/infer"
-# FILE_PATH = "sources/carnet_ficticio.pdf"
+FILE_PATH = "sources/CI1.pdf"
 # FILE_PATH = "sources/carnet.jpg"
-FILE_PATH = "sources/image.jpg"
+# FILE_PATH = "sources/image.jpg"
 
 def send():
     '''
     Method to test sending a file and parameters through the inference endpoint
     '''
+    # Measure overall time of operation
+    id = timer.start_measurement()
     
+    # Obtain arguments passed in the call
+    parser = argparse.ArgumentParser(description="Call inference endpoint with a file.")
+    parser.add_argument("--contact", type=str, help="Use the inference endpoint to obtain contact info.")
+    parser.add_argument("--account", type=str, help="Use the inference endpoint to obtain contact info.")
+
+    args = parser.parse_args()
+
+    # Detemine the type of inference
+    if args.contact:
+        inference_type = "contact"
+        filename = args.contact
+    elif args.account:
+        inference_type = "account"
+        filename = args.account
+    else:
+        logger.error("Inference type not recognized")
+
+    # Create the full file path
+    file_path = os.path.join("sources", filename)
+
+    # Echo the calling parameters
+    logger.info(f"INFERENCE TYPE from arguments: {inference_type}")
+    logger.info(f"FILE TO PROCESS from arguments: {file_path}")
+
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        raise
+
+
     # Data for the call, includes parameters
     data = {
-        "inference_type": "account",
+        "inference_type": inference_type,
         "user_id": "1"
     }
 
@@ -24,13 +59,13 @@ def send():
     logger.info(f"Data for the call: {data}")
 
     # Add the file in question
-    with open(FILE_PATH, "rb") as f:
+    with open(file_path, "rb") as f:
         files = {
-            "file": (FILE_PATH, f, "application/octet-stream")
+            "file": (file_path, f, "application/octet-stream")
         }
 
         # Log the file path
-        logger.info(f"File path: {FILE_PATH}")
+        logger.info(f"File path: {file_path}")
 
         # Call service
         try:
@@ -42,6 +77,10 @@ def send():
 
     print("\nStatus:", response.status_code)
     print("\nResponse:", response.text)
+    print("\n")
+
+    message = timer.calculate_time_elapsed(id)
+    logger.info(message)
 
 
 def send_with_visibility():
