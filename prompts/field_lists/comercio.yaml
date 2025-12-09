@@ -1,13 +1,13 @@
-razón social: >
+razon social: >
   Razón social o nombre legal del comercio según aparece en la escritura
   pública. Típicamente incluye 'Limitada', 'SpA', 'EIRL', etc. Incluir el
   nombre completo tal como aparece en el documento.
 
-nombre_fantasía: >
+nombre_fantasia: >
   Nombre de fantasía del comercio según aparece en el documento.
   Puedeser similar o muy distinto a la razón social. En general es una forma
   más comercialmente atractiva del nombrar al comercio.
 
-actividad_económica: >
+actividad_economica: >
   Actividad económica principal del comercio según aparece en el
   documento. Puede ser una o más actividades, separadas por comas.
