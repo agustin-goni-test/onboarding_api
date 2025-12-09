@@ -24,6 +24,7 @@ def send():
     parser = argparse.ArgumentParser(description="Call inference endpoint with a file.")
     parser.add_argument("--contact", type=str, help="Use the inference endpoint to obtain contact info.")
     parser.add_argument("--account", type=str, help="Use the inference endpoint to obtain contact info.")
+    parser.add_argument("--commerce", type=str, help="Use the inference endpoint to obtain commerce info.")
 
     args = parser.parse_args()
 
@@ -34,6 +35,9 @@ def send():
     elif args.account:
         inference_type = "account"
         filename = args.account
+    elif args.commerce:
+        inference_type = "commerce"
+        filename = args.commerce
     else:
         logger.error("Inference type not recognized")
 

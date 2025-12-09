@@ -51,20 +51,6 @@ async def inference_manager(
     final_state = agent.capture_data(initial_state=initial_state)
     # data_list = json.loads(final_state["response_format"])
 
-    # response_data = {
-    #     "inference_type": inference_type,
-    #     "user_id": user_id,
-    #     "filename": file.filename,
-    #     "content_type": file.content_type,
-    #     "message": "File uploaded and processed correctly", 
-    # }
-
-    # return JSONResponse(
-    #     content=response_data,
-    #     status_code=200,
-    #     media_type="application/json"
-    # )
-
     json_data = json.dumps(
         final_state["response_format"],
         ensure_ascii=False

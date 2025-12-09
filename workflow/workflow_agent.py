@@ -502,6 +502,8 @@ class InferenceAgent:
             file_name = "contacto.yaml"
         elif self.type_of_inference == 'account':
             file_name = "cuenta.yaml"
+        elif self.type_of_inference == 'commerce':
+            file_name = "comercio.yaml"
 
         path = Path("prompts/field_lists") / file_name
         with path.open("r", encoding='utf-8') as f:
