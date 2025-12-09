@@ -11,3 +11,8 @@ nombre_fantasia: >
 actividad_economica: >
   Actividad económica principal del comercio según aparece en el
   documento. Puede ser una o más actividades, separadas por comas.
+
+composicion: >
+  Composición de la propiedad y capital de los dueños del comercio.
+  Indicar su nombre completo, RUT y porcentaje de participación de cada uno
+  (por ejemplo: 'Juan Pérez, 12345678-9, 60%; María González, 98765432-1, 40%').
