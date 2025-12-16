@@ -22,35 +22,52 @@ def send():
     
     # Obtain arguments passed in the call
     parser = argparse.ArgumentParser(description="Call inference endpoint with a file.")
-    parser.add_argument("--contact", type=str, help="Use the inference endpoint to obtain contact info.")
-    parser.add_argument("--account", type=str, help="Use the inference endpoint to obtain contact info.")
-    parser.add_argument("--commerce", type=str, help="Use the inference endpoint to obtain commerce info.")
+    parser.add_argument("--contact", type=str, nargs="+", help="Use the inference endpoint to obtain contact info.")
+    parser.add_argument("--account", type=str, nargs="+", help="Use the inference endpoint to obtain contact info.")
+    parser.add_argument("--commerce", type=str, nargs="+", help="Use the inference endpoint to obtain commerce info.")
 
     args = parser.parse_args()
 
     # Detemine the type of inference
     if args.contact:
         inference_type = "contact"
-        filename = args.contact
+        filenames = args.contact
     elif args.account:
         inference_type = "account"
-        filename = args.account
+        filenames = args.account
     elif args.commerce:
         inference_type = "commerce"
-        filename = args.commerce
+        filenames = args.commerce
     else:
         logger.error("Inference type not recognized")
+        return
+    
+    files_payloads = []
 
-    # Create the full file path
-    file_path = os.path.join("sources", filename)
+    # Iterate through all the filenames provided
+    for filename in filenames:
+        file_path = os.path.join("sources", filename)
+
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            raise FileNotFoundError(file_path)
+        
+        logger.info(f"FILE TO PROCESS from arguments: {file_path}")
+
+        files_payloads.append(
+            ("files",
+                (
+                    filename,
+                    open(file_path, "rb"),
+                    "application/octet-stream"
+                )
+            )
+        )
+
 
     # Echo the calling parameters
     logger.info(f"INFERENCE TYPE from arguments: {inference_type}")
-    logger.info(f"FILE TO PROCESS from arguments: {file_path}")
-
-    if not os.path.exists(file_path):
-        logger.error(f"File not found: {file_path}")
-        raise
+    # logger.info(f"FILE TO PROCESS from arguments: {file_path}"
 
 
     # Data for the call, includes parameters
@@ -63,21 +80,27 @@ def send():
     logger.info(f"Data for the call: {data}")
 
     # Add the file in question
-    with open(file_path, "rb") as f:
-        files = {
-            "files": (file_path, f, "application/octet-stream")
-        }
+    # with open(file_path, "rb") as f:
+    #     files = {
+    #         "files": (file_path, f, "application/octet-stream")
+    #     }
 
-        # Log the file path
-        logger.info(f"File path: {file_path}")
+    #     # Log the file path
+    #     logger.info(f"File path: {file_path}")
 
-        # Call service
-        try:
-            response = requests.post(URL, data=data, files=files)
-            logger.info("Call to inference endpoint successful.")
+    #     # Call service
+    #     try:
+    #         response = requests.post(URL, data=data, files=files)
+    #         logger.info("Call to inference endpoint successful.")
         
-        except Exception as e:
-            logger.error(f"Call to inference endpoint failed: {str(e)}")
+    #     except Exception as e:
+    #         logger.error(f"Call to inference endpoint failed: {str(e)}")
+
+    try:
+        response = requests.post(URL, data=data, files=files_payloads)
+    except Exception as e:
+        logger.error(f"Call to inference endpoint failed: {str(e)}")
+        return
 
     print("\nStatus:", response.status_code)
     print("\nResponse:", response.text)

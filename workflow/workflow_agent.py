@@ -68,18 +68,33 @@ class InferenceAgent:
         self.type_of_inference = None
         self.prompt = None
         self.fields = None
-        self.uploaded_file = None
-        self.mime_type = None
+        # self.uploaded_file = None
+        # self.mime_type = None
+        self.uploaded_files: List[Dict] = []
         self.graph = self._build_graph()
 
 
-    def feed_file_to_agent(self, data: bytes, name: str):
+    # def feed_file_to_agent(self, data: bytes, name: str):
+    def feed_files_to_agent(self, files: List[Tuple[bytes, str]]):
         '''
         Method to assign the contents of the file to the agent.
         '''
         # self.mime_type = self._determine_mime_type(name)
-        self.mime_type = self._determine_mime_type(name)
-        self.uploaded_file = data
+        # self.mime_type = self._determine_mime_type(name)
+        # self.uploaded_file = data
+
+        self.uploaded_files = []
+
+        for data, name in files:
+            mime_type = self._determine_mime_type(name)
+            self.uploaded_files.append(
+                {
+                    "data": data,
+                    "name": name,
+                    "mime_type": mime_type
+                }
+            )
+
 
     def set_type_of_inference(self, type: str):
         self.type_of_inference = type
@@ -219,21 +234,27 @@ class InferenceAgent:
         # Create Gemini client
         client = genai.Client(api_key=api_key)
 
-        base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
+        # base64_data = base64.b64encode(self.uploaded_file).decode('utf-8')
         self.logger.info("Passing file to GEMINI as Base64 encoded data...")
 
-        # Run inference on Gemini client. Pass the file as an inline stream of bytes
-        response = client.models.generate_content(
-            model=model,
-            contents=[
-                self.prompt,
+        # Create the content to contain the prompt and later add the files
+        contents = [self.prompt]
+
+        # Iterate through the files and add them to the contents
+        for f in self.uploaded_files:
+            contents.append(
                 {
                     "inline_data": {
-                        "mime_type": self.mime_type,
-                        "data": base64_data
+                        "mime_type": f["mime_type"],
+                        "data": base64.b64encode(f["data"]).decode('utf-8')
                     }
                 }
-            ]
+            )
+
+        # Run inference on client
+        response = client.models.generate_content(
+            model=model,
+            contents=contents
         )
 
         # Parse and normalize response
@@ -269,66 +290,74 @@ class InferenceAgent:
         # Create the client
         client = OpenAI(api_key=api_key)
 
-        if self.mime_type.startswith('image/'):
-            base64_image = base64.b64encode(self.uploaded_file).decode('utf-8')
+        # Build unified content payload
+        content = [
+            {
+                "type": "input_text",
+                "text": self.prompt
+            }
+        ]
 
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
+        uploaded_file_ids = []
+
+        # First, uplaod all non-image files
+        for f in self.uploaded_files:
+            if not f["mime_type"].startswith("image/"):
+                # Create an in memory file to upload to the client
+                file_obj = io.BytesIO(f["data"])
+
+                # Upload file and obtain id
+                extension = self._obtain_extension_for_file(f["mime_type"])
+                filename = f["name"] or f"file.{extension}"
+                
+                uploaded = client.files.create(
+                    file=(filename, file_obj, f["mime_type"]),
+                    purpose="user_data"
+                )
+                
+                file_id = uploaded.id
+                uploaded_file_ids.append(file_id)
+                # self.logger.info(f"Passing file {f['name']} to OPENAI as direct upload...")
+
+        # Use iterator to obtain file ids in order
+        file_id_iter = iter(uploaded_file_ids)
+
+        # Add files into the content payload for inference
+        for f in self.uploaded_files:
+            # If file is an image type, use inline base64
+            if f["mime_type"].startswith("image/"):
+                base64_image = base64.b64encode(f["data"]).decode('utf-8')
+                
+                content.append(
                     {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": self.prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
-                        ]
+                        "type": "input_image",
+                        "image_url": f"data:{f['mime_type']};base64,{base64_image}"
                     }
-                ],
-                max_tokens=4096
-            )
-
-            response_text = response.choices[0].message.content
-
-        else:
+                )
             
-            # Create an in memory file to upload to the client
-            file_obj = io.BytesIO(self.uploaded_file)
-            # mime_type = "application/pdf"
-
-            # Upload file and obtain id
-            extension = self._obtain_extension_for_file(self.mime_type)
-            filename = "file." + extension
-            uploaded = client.files.create(file=(filename, file_obj, self.mime_type),
-                                        purpose='user_data'
-                                        )
-            file_id = uploaded.id
-            self.logger.info("Passing file to OPENAI as direct upload...")
-            
-        
-            # Retrieve the prompt (for simpler readability)
-            prompt = self.prompt
-
-            # Call client to create inference
-            response = client.responses.create(
-                model=model,
-                input=[
+            else:
+                # If it's a PDF, use the ids of the previously uploaded files
+                file_id = next(file_id_iter)
+                content.append(
                     {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": prompt},
-                            {"type": "input_file", "file_id": file_id }
-                        ]
+                        "type": "input_file",
+                        "file_id": file_id
                     }
-                ],
-                max_output_tokens=4096
-            )
+                )
 
-            # Obtain and parse response
-            response_text = response.output_text
+        # Single inference call (includes all files)
+        response = client.responses.create(
+            model=model,
+            input=[
+                { 
+                    "role": "user",
+                    "content": content
+                }
+            ],
+            max_output_tokens=4096
+        )
+
+        response_text = response.output_text
 
         content_json = self._clean_and_parse_json(response_text)
         json_response = self._normalize_fields(content_json, self.fields)
@@ -340,7 +369,7 @@ class InferenceAgent:
             "inferences": ["openai"],                         # appended to state.inferences
             "local_results": [("openai", json_response)]      # appended to state.local_results
         }
-            
+       
 
     def _run_consolidation(self, state: InferenceState) -> InferenceState:
         '''
@@ -562,7 +591,7 @@ class InferenceAgent:
         self.prompt = prompt
         
     def _set_prompt_from_file(self, fields_dict: Dict[str, str]):
-        path = Path("prompts/templates") / "default_prompt.txt"
+        path = Path("prompts/templates") / "multiple_prompt.txt"
         prompt_template = path.read_text(encoding='utf-8')
         self.prompt = prompt_template.replace("{{fields_dict}}", str(fields_dict))
 

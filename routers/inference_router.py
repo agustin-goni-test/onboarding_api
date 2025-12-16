@@ -41,17 +41,30 @@ async def inference_manager(
             content={"error": "No files uploaded for inference."}
         )
     
-    first_file = files[0]
+    # first_file = files[0]
 
-    logger.info(f"Received inference call with type: {inference_type}, user: {user_id} and file: {first_file.filename}")
+    file_payloads = []
+    filenames = []
+
+    logger.info(f"Received inference call with type: {inference_type}, user: {user_id} and a list of files")
 
     # Obtain file as byte stream from the UploadFile object of FastAPI
-    file_bytes = await first_file.read()
-    file_name = first_file.filename
+    # file_bytes = await first_file.read()
+    # file_name = first_file.filename
+
+    # Append all the files in the request
+    for f in files:
+        file_bytes = await f.read()
+        file_payloads.append( (file_bytes, f.filename) )
+        filenames.append(f.filename)
+        logger.info(f"File to use in inference: {f.filename}")
+
+    logger.info(f"Total files received for inference: {len(file_payloads)}")
+    
 
     # Create agent and pass the file
     agent = InferenceAgent()
-    agent.feed_file_to_agent(file_bytes, file_name)
+    agent.feed_files_to_agent(file_payloads)
     agent.set_type_of_inference(inference_type)
     logger.info("Inference agent created...")
 
@@ -70,8 +83,8 @@ async def inference_manager(
         content={
             "inference_type": inference_type,
             "user_id": user_id,
-            "filename": first_file.filename,
-            "content_type": first_file.content_type,
+            "filename": filenames,
+            "file_count": len(filenames),
             "data": final_state["response_format"]
         }
     )
