@@ -24,7 +24,8 @@ def test_endpoint():
 async def inference_manager(
     inference_type: str = Form(...),
     user_id: str = Form(...),
-    file: UploadFile = File(...)
+    # file: UploadFile = File(...)
+    files: list[UploadFile] = File(...)
 ):
     '''
     Receives the following (tentative):
@@ -33,11 +34,20 @@ async def inference_manager(
     - file: uploaded file
     '''
 
-    logger.info(f"Received inference call with type: {inference_type}, user: {user_id} and file: {file.filename}")
+    if not files:
+        logger.error("No files uploaded for inference.")
+        return JSONResponse(
+            status_code=400,
+            content={"error": "No files uploaded for inference."}
+        )
+    
+    first_file = files[0]
+
+    logger.info(f"Received inference call with type: {inference_type}, user: {user_id} and file: {first_file.filename}")
 
     # Obtain file as byte stream from the UploadFile object of FastAPI
-    file_bytes = await file.read()
-    file_name = file.filename
+    file_bytes = await first_file.read()
+    file_name = first_file.filename
 
     # Create agent and pass the file
     agent = InferenceAgent()
@@ -60,8 +70,8 @@ async def inference_manager(
         content={
             "inference_type": inference_type,
             "user_id": user_id,
-            "filename": file.filename,
-            "content_type": file.content_type,
+            "filename": first_file.filename,
+            "content_type": first_file.content_type,
             "data": final_state["response_format"]
         }
     )

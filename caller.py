@@ -65,7 +65,7 @@ def send():
     # Add the file in question
     with open(file_path, "rb") as f:
         files = {
-            "file": (file_path, f, "application/octet-stream")
+            "files": (file_path, f, "application/octet-stream")
         }
 
         # Log the file path
