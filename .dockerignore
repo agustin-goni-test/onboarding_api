@@ -6,5 +6,7 @@ logs/
 __pycache__/
 *.pyc
 .vscode/
-
-
+.git
+.gitignore
+.idea
+caller.py
