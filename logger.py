@@ -6,8 +6,21 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# This allows us to know if the process is deployed in AWS
+# If running in AWS, we should obtain the configuration from
+# Secrets Manager directly
+running_in_aws = any([
+    os.getenv("AWS_EXECUTION_ENV"),
+    os.getenv("AWS_LAMBDA_FUNCTION_NAME"),
+    os.getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"),
+    os.getenv("ECS_CONTAINER_METADATA_URI_V4"),
+])
+
+# If it's not running in AWS, try to load .env file
+# This allows things to work seamlessly in local development
+if not running_in_aws and os.path.exists(".env"):
+    load_dotenv()
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):
