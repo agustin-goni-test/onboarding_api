@@ -35,15 +35,15 @@ if not running_in_aws and os.path.exists(".env"):
     load_dotenv()
 
 class ResultNode(BaseModel):
-    field: str = ""
-    found: bool = False
-    found_by: List[str] = Field(default_factory=list)
-    values: List[str] = Field(default_factory=list)
-    explanations: List[str] = Field(default_factory=list)
-    probable_value: str = ""
-    confidences: List[int] = Field(default_factory=list)
-    low_confidence: bool = False
-    found_multiple: bool = False
+    field: str = Field("", description="Name of the field inferred")
+    found: bool = Field(False, description="Whether the field was found in the document")
+    found_by: List[str] = Field(default_factory=list, description="Which models or LLM found values in the inference")
+    values: List[str] = Field(default_factory=list, description="All values found for the field")
+    explanations: List[str] = Field(default_factory=list, description="Explanations for each value found")
+    probable_value: str = Field("", description="Most probable value for the field")
+    confidences: List[int] = Field(default_factory=list, description="Confidence levels for each value found")
+    low_confidence: bool = Field(False, description="Whether the probable value has low confidence")
+    found_multiple: bool = Field(False, description="Whether multiple different values were found for the field")
 
     def to_json(self, **kwargs) -> str:
         '''Convert to JSON'''
@@ -62,16 +62,24 @@ class InferenceState(BaseModel):
     local_results: Annotated[
         List[Tuple[str, Dict[str, Any]]],
         operator.add
-        ] = Field(default_factory=list)
+        ] = Field(default_factory=list,
+                  description="Results obtained from each inference tool"
+                  )
     
     # The solution is to annotate them to be able to add incrementally
     # to the final value of the property. Otherwise, only one edit is possible
-    inferences: Annotated[List[str], operator.add] = Field(default_factory=list)
+    inferences: Annotated[List[str],
+                          operator.add
+                          ] = Field(default_factory=list,
+                                    description="Inference tools used"
+                                    )
     
     # These other properties don't need to be concurrently written
-    results: List[ResultNode] = Field(default_factory=list)
-    success: bool = False
-    response_format: List[Dict[str, Any]] = Field(default_factory=list)
+    results: List[ResultNode] = Field(default_factory=list,
+                                      description="Final results obtained after consolidation")
+    success: bool = Field(False, description="Whether the inference was successful")
+    response_format: List[Dict[str, Any]] = Field(default_factory=list,
+                                                  description="Final response format to be returned by the API")
 
 
 class InferenceAgent:

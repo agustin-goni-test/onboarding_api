@@ -7,8 +7,24 @@ from logger import get_logger, setup_logging
 setup_logging()
 logger = get_logger(__name__)
 
+tags_metadata = [
+    {
+        "name": "inference",
+        "description": "Endpoints related to document inference operations."
+    },
+    {
+        "name": "test",
+        "description": "Testing endpoints to verify connectivity and functionality."
+    }
+]
+
+
 # Create app
-app = FastAPI(title="Onboarding API", version="0.1")
+app = FastAPI(title="Onboarding API",
+              version="0.1",
+              description="Obtain fields from documents through inference models.",
+              openapi_tags=tags_metadata
+              )
 
 ####################################################
 # Added this to make it compatible with Angular calls

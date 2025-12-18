@@ -20,7 +20,46 @@ def test_endpoint():
     return {"status": "Endpoint working properly"}
 
 
-@router.post("/infer", summary="Endpoint that carries out an inference to obtain document data.")
+@router.post("/infer",
+             summary="Endpoint that carries out an inference to obtain document data.",
+             description="Receives files and inference type to obtain relevant fields from the document(s).",
+             responses={
+                    200: {
+                        "description": "Inference completed successfully.",
+                        "content": {
+                            "application/json": {
+                                "example": {
+                                    "inference_type": "contact",
+                                    "user_id": "12345678-9",
+                                    "filename": ["document1.pdf", "document2.jpg"],
+                                    "file_count": 2,
+                                    "data": [
+                                        {
+                                            "field": "name",
+                                            "found": True,
+                                            "found_by": ["model_a", "llm_b"],
+                                            "values": ["John Doe", "J. Doe"],
+                                            "explanations": [
+                                                "Extracted from the header using model_a.",
+                                                "Inferred from context using llm_b."
+                                            ],
+                                            "probable_value": "John Doe",
+                                            "confidences": [95, 85],
+                                            "low_confidence": False,
+                                            "found_multiple": True
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    400: {
+                        "description": "Bad Request - No files uploaded."},
+                    500: {
+                        "description": "Internal Server Error - An error occurred during inference."}
+    
+                }
+             )
 async def inference_manager(
     inference_type: str = Form(...),
     user_id: str = Form(...),
