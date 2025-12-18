@@ -53,59 +53,73 @@ def setup_logging():
     # Set directory for log files from configuration
     log_dir = os.getenv("LOG_DIR", "logs")
 
+    # These properties determine where and how to log
+    # If this is deployed in AWS we may skip them altogeter (always true)
     log_in_json = os.getenv("LOG_IN_JSON", "true").lower() == "true"
     log_in_console = os.getenv("LOG_IN_CONSOLE", "true").lower() == "true"
 
-    # Create path if it doesn't exist
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # Use variable to determine if the process is running in AWS
+    running_in_container = os.getenv("ECS_CONTAINER_METADATA_URI_V4") is not None or os.getenv("AWS_EXECUTION_ENV") is not None
 
     # Create logger
     logger = logging.getLogger()
     logger.setLevel(log_level)
-
+    
     # Clear any existing handlers
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    # File handler with plain text format
-    text_file_handler = RotatingFileHandler(
-        filename=os.path.join(log_dir, "app.log"),
-        maxBytes=10*1024*1024,  # 10 MB
-        backupCount=5
-    )
-    text_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
-    )
-    
-    # Format file as plain text
-    text_file_handler.setFormatter(text_formatter)
+    # Only add file and JSON handlers when running locally, regardless of settings
+    if not running_in_container:
 
-    # If JSON logging is enabled
-    if log_in_json:
-        # File habndler with JSON Format
-        file_handler = RotatingFileHandler(
-            filename=os.path.join(log_dir, "app.json.log"),
+        # Create path if it doesn't exist
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        # File handler with plain text format
+        text_file_handler = RotatingFileHandler(
+            filename=os.path.join(log_dir, "app.log"),
             maxBytes=10*1024*1024,  # 10 MB
             backupCount=5
         )
+        text_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s'
+        )
+        
+        # Format file as plain text
+        text_file_handler.setFormatter(text_formatter)
+        logger.addHandler(text_file_handler)
 
-        # Format file as JSON
-        file_handler.setFormatter(JSONFormatter())
+        # If JSON logging is enabled
+        if log_in_json:
+            # File habndler with JSON Format
+            file_handler = RotatingFileHandler(
+                filename=os.path.join(log_dir, "app.json.log"),
+                maxBytes=10*1024*1024,  # 10 MB
+                backupCount=5
+            )
 
-    # If logging in console is enabled
-    if log_in_console:
+            # Format file as JSON
+            file_handler.setFormatter(JSONFormatter())
+            logger.addHandler(file_handler)
+        
+
+    # If logging in console is enabled (default for AWS).
+    # This is why the condition is a OR (either enabled or running in container)
+    # Should log to CloudWatch
+    if log_in_console or running_in_container:
         # Console handler with simple format
         console_handler = logging.StreamHandler(sys.stdout)
         console_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
 
     # Add handlers to the logger
-    logger.addHandler(text_file_handler)
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
+    # logger.addHandler(text_file_handler)
+    # logger.addHandler(file_handler)
+    # logger.addHandler(console_handler)
     
 
     # Set level for external libraries to WARNING to reduce noise
