@@ -1,0 +1,37 @@
+participacion: >
+  Obtener los socios y sus participaciones en el comercio.
+  Contestar con el formato: ''' [Nom bre], [RUT], [Porcentaje]; ''', separando con
+  punto y coma (";") cada socio. La propiedad debiera sumar 100%
+
+  EJEMPLOS:
+
+  CASO:
+  "Juan Perez, RUT 8.765.432-1.... La propiedad completa de la sociedad es propiedad de
+  Juan Perez."
+  RESPUESTA:
+  Juan Perez, 8765432-1, 100%
+
+  CASO:   
+  "Juan Perez, RUT 7.123.456-8 tiene el 40% de la participación, y Gonzalo Soto,
+  RUT 8.765.433-1, tiene el 60%"
+  RESPUESTA:
+  Juan Perez, 7123456-8, 40%; Gonzalo Soto, 8765432-1; 60%"
+
+  CASO:
+  "Las acciones totales de la sociedad son 200... Juan Perez, RUT 7.123.456-8 suscribe 50 acciones,
+  Gonzalo Soto, RUT 8.765.432-21 suscribe 80 y Ana González, RUT 10.101.101-2 suscribe 70."
+  RESPUESTA:
+  Juan Perez, 71234567-8, 25%; Gonzalo Soto, 8765432-1, 40%; Ana González, 10101101-2, 35%
+  EXPLICACIÓN:
+  Para obtener esta respuesta es necesario calcular las participaciones, dado que no están explícitas.
+  Entonces, por ejemplo, para Juan Perez la participación es 50 acciones de las 200 totales, 50/200 = 0.25 = 25%
+
+  CASO:
+  "El capital total de la sociedad es 1.000.000... Juan Perez, RUT 7.123.456-8 suscribe un capital de 250.000,
+  Gonzalo Soto, RUT 8.765.432-21 suscribe un capital de 400.000 y Ana González, RUT 10.101.101-2 suscribe un capital de 350.000"
+  RESPUESTA:
+  Juan Perez, 71234567-8, 25%; Gonzalo Soto, 8765432-1, 40%; Ana González, 10101101-2, 35%
+  EXPLICACIÓN:
+  Para obtener esta respuesta es necesario calcular el capital proporcional, dado que no están explícitas.
+  Entonces, por ejemplo, para Juan Perez la participación de capital es 250.000 del total de 1.000.000, 250.000/1.000.000 = 0.25 = 25%
+

@@ -11,8 +11,32 @@ nombre_fantasia: >
 actividad_economica: >
   Actividad económica principal del comercio según aparece en el
   documento. Puede ser una o más actividades, separadas por comas.
+  Si son varias, separar con ";"
+
+representante_legal: >
+  Información del representante legal and el SII del comercio, en formato [Nombre], [RUT].
+  El documento puede decir indistintamente "representante legal" o "representante ante el SII".
+  Indicar SOLAMENTE a los representantes. No incluir administradores o gerentes.
+  Si son varios, separar con ";". 
+
+domicilio: >
+  Domicilio del comercio en formato COMUNA: [comuna], REGIÓN: [región]
+
+# composicion: >
+#   Composición de la propiedad y capital de los dueños.
+#   REGLA ESTRICTA: extrae ÚNICAMENTE el nombre, RUT y porcentaje de participación.
+#   Los porcentajes deben sumar 100%.
+#   No incluyas facultades, poderes legales, ni otra información adicional.
+#   Si el texto es muy largo, trunca la respuesta.
+#   Ejemplo de respuestas válidas: 'Juan Pérez, 12345678-9, 60%; María González, 98765432-1, 40%',
+#   'Rodrigo Rodriguez, 14.111.222-3, 30%; Pedro Perez, 9.999.999-9, 40%, Benito Benitez 23.232.232-8, 30%'.
 
 composicion: >
-  Composición de la propiedad y capital de los dueños del comercio.
-  Indicar su nombre completo, RUT y porcentaje de participación de cada uno
-  (por ejemplo: 'Juan Pérez, 12345678-9, 60%; María González, 98765432-1, 40%').
+  Lista de socios actuales. Formato estricto: [Nom bre], [RUT], [Porcentaje];
+  No incluir frases completas, cargos, facultades u otras informaciones.
+  Los porcentajes deben sumar 100%. Los RUTs deben expresarse como números, no palabras.
+  ### EJEMPLO DE EXTRACCIÓN CORRECTA:
+  TEXTO ORIGINAL: "Don Juan Perez, rut diez millones... titular del cincuenta por ciento, quien podrá administrar la sociedad con facultades de..."
+  VALOR GENERADO: "Juan Perez, 10.000.000-0, 50%"
+  ### EJEMPLO DE EXTRACCIÓN INCORRECTA (DEMASIADO LARGO):
+  VALOR GENERADO: "Don Juan Perez, cédula de identidad número diez millones... quien es dueño del 50% y tiene facultades de administración..."

@@ -25,6 +25,7 @@ def send():
     parser.add_argument("--contact", type=str, nargs="+", help="Use the inference endpoint to obtain contact info.")
     parser.add_argument("--account", type=str, nargs="+", help="Use the inference endpoint to obtain contact info.")
     parser.add_argument("--commerce", type=str, nargs="+", help="Use the inference endpoint to obtain commerce info.")
+    parser.add_argument("--participation", type=str, nargs="+", help="Use inference endpoint to obtain only the participation.")
 
     args = parser.parse_args()
 
@@ -38,6 +39,9 @@ def send():
     elif args.commerce:
         inference_type = "commerce"
         filenames = args.commerce
+    elif args.participation:
+        inference_type = "participation"
+        filenames = args.participation
     else:
         logger.error("Inference type not recognized")
         return

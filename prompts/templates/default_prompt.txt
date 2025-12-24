@@ -24,6 +24,7 @@ Rules:
 - Para num_serie: sin puntos.
 - Si hay inferencia → match=true pero confidence<70 y explicar inferencia.
 - No inventar datos no sugeridos por el texto.
+- Resumir, evitar respuestas verbosas o muy extensas.
 - Formato de salida: solo JSON.
 
 Field descriptions:
