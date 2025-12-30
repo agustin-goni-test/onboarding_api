@@ -6,3 +6,7 @@ dotenv
 langgraph
 google-genai
 openai
+celery
+redis
+psycopg2-binary
+httpx
