@@ -1,8 +1,8 @@
-from uuid import uuid4
-from fastapi import APIRouter, Form, File, UploadFile
+from uuid import uuid4, UUID
+from fastapi import APIRouter, Form, File, UploadFile, HTTPException
 
 from tasks.inference_worker import run_inference_job
-from db.db import create_job
+from db.db import create_job, get_job
 from logger import setup_logging, get_logger
 from files.files import save_files
 
@@ -41,3 +41,13 @@ async def async_inference(
         "status": "PENDING",
         "message": "Job submitted successfully. Processing will occur asynchronously."
     }
+
+
+@router.get("/status/{job_id}")
+async def get_job_status(job_id: UUID):
+    job = get_job(job_id)
+
+    if not job:
+        raise HTTPException(404)
+
+    return job
