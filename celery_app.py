@@ -1,10 +1,13 @@
-from celery_app import Celery
+from celery import Celery
 
 celery_app = Celery(
     'onboarding_api',
     broker='redis://localhost:6379/0',
     backend='redis://localhost:6379/0'
 )
+
+# Explicit import to register the task
+import tasks.inference_worker
 
 celery_app.conf.update(
     task_serializer='json',

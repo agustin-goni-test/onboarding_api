@@ -6,12 +6,13 @@ from db.db import create_job, get_job
 from logger import setup_logging, get_logger
 from files.files import save_files
 
+# Set up logging capabilities
 setup_logging()
 logger = get_logger(__name__)   
 
 router = APIRouter(prefix="/onboarding/async-inference")
 
-@router.post("/async-infer", status_code=202)
+@router.post("/infer", status_code=202)
 async def async_inference(
     inference_type: str = Form(...),
     user_id: str = Form(...),
@@ -27,12 +28,13 @@ async def async_inference(
     # Create the job in the database
     create_job(
         job_id=str(job_id),
+        rut_comercio="56789789-0",
         inference_type=inference_type,
         user_id=user_id,
         status="PENDING"
     )
 
-    save_files(str(job_id), files)
+    await save_files(str(job_id), files)
 
     run_inference_job.delay(job_id)
 

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import inference_router
+from routers import inference_router, async_router
 from logger import get_logger, setup_logging
 
 # Set up logging and get the logger
@@ -46,6 +46,7 @@ app.add_middleware(
 
 # Declare router to access inference endpoint(s)
 app.include_router(inference_router.router)
+app.include_router(async_router.router)
 
 # Create middleware for logging
 @app.middleware("http")

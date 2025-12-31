@@ -3,12 +3,24 @@ import argparse
 import os
 from logger import setup_logging, get_logger
 from utils import TimeMeasure
+from dotenv import load_dotenv
+
+load_dotenv()
 
 setup_logging()
 logger = get_logger(__name__)
 timer = TimeMeasure()
 
-URL = "http://127.0.0.1:8000/onboarding/inference/infer"
+type_of_call = os.getenv("INFERENCE_CALL", "synch")
+
+if type_of_call == "synch":
+    URL = "http://127.0.0.1:8000/onboarding/inference/infer"
+elif type_of_call == "asynch":
+    URL = "http://127.0.0.1:8000/onboarding/async-inference/infer"
+else:
+    raise Exception("No identified type of execution.")
+
+
 FILE_PATH = "sources/CI1.pdf"
 # FILE_PATH = "sources/carnet.jpg"
 # FILE_PATH = "sources/image.jpg"

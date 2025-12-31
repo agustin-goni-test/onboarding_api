@@ -10,11 +10,10 @@ from db.db import (
 from files.files import load_files_for_http
 
 @celery_app.task(
-    bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={'max_retries': 3, 'countdown': 5}
 )
-def run_inference_job(self, job_id: str):
+def run_inference_job(job_id: str):
     '''
     Runs inference asynchronously using the infer/ endpoint.
     '''
@@ -45,5 +44,5 @@ def run_inference_job(self, job_id: str):
         mark_job_done(job_id)
 
     except Exception as e:
-        mark_job_failed(job_id)
+        mark_job_failed(job_id, str(e))
         raise
